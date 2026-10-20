@@ -3,6 +3,7 @@ package com.gathin.tvhome;
 import android.accessibilityservice.AccessibilityService;
 import android.content.Intent;
 import android.provider.Settings;
+import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
 
@@ -21,6 +22,10 @@ public class HomeKeyService extends AccessibilityService {
     private int[] settingsScancodes = new int[0];
     private int[] settingsKeycodes = new int[0];
     private boolean settingsPanel;
+    private DeviceProfile deviceProfile = DeviceProfile.NONE;
+    /** Avoid event storms while the firmware transitions through FallbackHome into this launcher. */
+    private long lastHomeRedirectAt;
+    private static final long HOME_REDIRECT_DEBOUNCE_MS = 900L;
 
     @Override
     protected void onServiceConnected() {
@@ -30,6 +35,7 @@ public class HomeKeyService extends AccessibilityService {
         Config config = Config.load(this);
         settingsKeycodes = config.settingsKeycodes;
         settingsPanel = config.settingsKeyPanel;
+        deviceProfile = DeviceProfile.load(this);
     }
 
     private boolean isSettingsKey(KeyEvent event) {
@@ -63,6 +69,28 @@ public class HomeKeyService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event == null || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        CharSequence pkgCs = event.getPackageName();
+        CharSequence clsCs = event.getClassName();
+        String pkg = pkgCs == null ? "" : pkgCs.toString();
+        String cls = clsCs == null ? "" : clsCs.toString();
+
+        // Never react to our own window changes. On MFTR0 the firmware routes Home through either
+        // com.mitv.tvhome or com.xiaomi.mitv.settings/.entry.FallbackHome; the device profile names
+        // those exact targets so other Xiaomi Settings screens are not hijacked.
+        if (pkg.equals(getPackageName()) || !deviceProfile.shouldOverrideHome(pkg, cls)) return;
+
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastHomeRedirectAt < HOME_REDIRECT_DEBOUNCE_MS) return;
+        lastHomeRedirectAt = now;
+
+        Intent home = new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_HOME)
+                .setComponent(new android.content.ComponentName(this, MainActivity.class))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        startActivity(home);
     }
 
     @Override
