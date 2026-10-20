@@ -1821,7 +1821,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         boolean separatedNonHdmi = false;
         for (DeviceProfile.Input input : deviceProfile.inputs) {
             int state = -1;
-            if (tim != null && input.tvInputId != null && !input.tvInputId.isEmpty()) {
+            // MFTR0 reports both tuner services as connected even without proving RF reception; do not
+            // turn that into a misleading green status. HDMI/AV state is still useful and verified.
+            if ((input.isHdmi() || input.isAv()) && tim != null
+                    && input.tvInputId != null && !input.tvInputId.isEmpty()) {
                 try {
                     state = tim.getInputState(input.tvInputId);
                 } catch (IllegalArgumentException ignored) {
