@@ -95,6 +95,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private String inputAction;
     private String sourcePanelService;
     private String sourcePanelAction;
+    /** Device-specific integration points; NONE keeps the upstream generic Android TV behaviour. */
+    private DeviceProfile deviceProfile = DeviceProfile.NONE;
 
     private AppAdapter adapter;
     private RecyclerView grid;
@@ -240,6 +242,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         density = getResources().getDisplayMetrics().density;
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
+        deviceProfile = DeviceProfile.load(this);
         settingsKeycodes = cfg.settingsKeycodes;
         settingsKeyPanel = cfg.settingsKeyPanel;
         COLUMNS = cfg.columns;
@@ -352,7 +355,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             grid.setLayoutAnimation(new LayoutAnimationController(
                     AnimationUtils.loadAnimation(this, enterAnim), enterDelay));
         }
-        adapter = new AppAdapter(this, this, COLUMNS, cfg);
+        adapter = new AppAdapter(this, this, COLUMNS, cfg, deviceProfile);
         dockApps = cfg.dockApps;
         fillDockLeavesSlots = !cfg.fillDock;
         adapter.setSavedOrder(Order.ranks(Order.load(Order.file(this)), dockApps));
@@ -1626,17 +1629,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * On firmware with a standard settings handler the behaviour is unchanged.
      */
     private Intent systemIntent(String standardAction) {
+        // A matched device profile wins even when a generic AOSP Settings activity technically resolves:
+        // on MiTV-MFTR0 the generic destination is not Xiaomi's picture/audio/network settings UI.
+        Intent profile = deviceProfile.settingsIntent(standardAction);
+        if (profile != null && profile.resolveActivity(getPackageManager()) != null) return profile;
+
         Intent i = new Intent(standardAction);
         if (i.resolveActivity(getPackageManager()) != null) return i;
-        i = new Intent().setComponent(new ComponentName(
-                "com.xiaomi.mitv.settings", "com.xiaomi.mitv.settings.entry.MainActivity"));
+
+        // Compatibility fallback for older Xiaomi profiles that pre-date device-profiles.
+        String activity = Settings.ACTION_WIFI_SETTINGS.equals(standardAction)
+                ? "com.xiaomi.mitv.settings.wifi.MitvWifiActivity"
+                : "com.xiaomi.mitv.settings.entry.MainActivity";
+        i = new Intent().setComponent(new ComponentName("com.xiaomi.mitv.settings", activity));
         if (i.resolveActivity(getPackageManager()) != null) return i;
         return new Intent(standardAction);   // nothing found: let open() show the can't-open toast
     }
 
     /** Hides the Inputs pill when it would have nothing to list: streaming boxes have no HDMI-in, AV or tuner. */
     private void updateInputsButton() {
-        boolean any = liveTvIntent() != null || !sourcePanelService.isEmpty();
+        boolean any = deviceProfile.hasInputs() || liveTvIntent() != null || !sourcePanelService.isEmpty();
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (!any && tim != null) {
             for (TvInputInfo info : tim.getTvInputList()) {
@@ -1702,6 +1714,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** Dropdown menu under the Inputs pill: HDMI ports (with connection state), AV and Live TV. */
     private void showInputs() {
         View anchor = findViewById(R.id.btnInputs);
+        if (deviceProfile.hasInputs()) {
+            showProfileInputs(anchor);
+            return;
+        }
         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
 
@@ -1784,6 +1800,52 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         popup.setWidth(Math.max(width, Math.min(panel.getMeasuredWidth(), (int) (360 * density))));
 
+        int alignment = getResources().getBoolean(R.bool.rtl_menu_bar) ? Gravity.END : Gravity.START;
+        dropIn(popup, panel, anchor, alignment);
+        rows.getChildAt(0).requestFocus();
+    }
+
+    /**
+     * Device profiles bypass the generic TvContract route when firmware needs explicit vendor activities.
+     * MiTV-MFTR0 is one such device: TvInputManager correctly reports the ports, but ACTION_VIEW does not
+     * switch them. The profile therefore owns both the visible list and the launch intent, avoiding the
+     * phantom HW8 input and keeping ATV/DTMB as separate entries.
+     */
+    private void showProfileInputs(View anchor) {
+        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        int width = Math.max(anchor.getWidth(), (int) (170 * density));
+        final PopupWindow popup = glassPopup(panel, width);
+        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
+
+        boolean separatedNonHdmi = false;
+        for (DeviceProfile.Input input : deviceProfile.inputs) {
+            int state = -1;
+            // MFTR0 reports both tuner services as connected even without proving RF reception; do not
+            // turn that into a misleading green status. HDMI/AV state is still useful and verified.
+            if ((input.isHdmi() || input.isAv()) && tim != null
+                    && input.tvInputId != null && !input.tvInputId.isEmpty()) {
+                try {
+                    state = tim.getInputState(input.tvInputId);
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+            if (!input.isHdmi() && rows.getChildCount() > 0 && !separatedNonHdmi) {
+                addSeparator(rows);
+                separatedNonHdmi = true;
+            }
+            int icon = input.isHdmi() ? R.drawable.ic_input
+                    : input.isAv() ? R.drawable.ic_av : R.drawable.ic_livetv;
+            final Intent intent = input.intent();
+            addInputRow(rows, popup, icon, input.label, state, () -> open(intent));
+        }
+
+        if (rows.getChildCount() == 0) {
+            Toast.makeText(this, R.string.no_inputs, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        popup.setWidth(Math.max(width, Math.min(panel.getMeasuredWidth(), (int) (360 * density))));
         int alignment = getResources().getBoolean(R.bool.rtl_menu_bar) ? Gravity.END : Gravity.START;
         dropIn(popup, panel, anchor, alignment);
         rows.getChildAt(0).requestFocus();

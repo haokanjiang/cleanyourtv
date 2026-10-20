@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, xiaomi-mftr0]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -49,3 +50,10 @@ jobs:
           size=$(stat -c %s launcher/app/build/outputs/apk/release/app-release.apk)
           echo "release APK: $((size / 1024)) KB"
           test "$size" -lt 409600 || { echo "APK is over 400 KB; the launcher targets 1 GB TVs, keep it small"; exit 1; }
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanyourtv-release-apk
+          path: launcher/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

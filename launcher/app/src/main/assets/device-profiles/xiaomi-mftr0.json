@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "id": "xiaomi-mftr0-freeguy",
+  "match": {
+    "model": "MiTV-MFTR0",
+    "device": "freeguy"
+  },
+  "stock_launcher_package": "com.mitv.tvhome",
+  "include_regular_launcher_apps": true,
+  "hidden_packages": [
+    "com.android.tv.settings"
+  ],
+  "settings": {
+    "main": {
+      "action": "com.xiaomi.mitv.settings.SETTINGS",
+      "component": "com.xiaomi.mitv.settings/.entry.MainActivity"
+    },
+    "wifi": {
+      "action": "com.xiaomi.mitv.settings.WIFI_SETTINGS",
+      "component": "com.xiaomi.mitv.settings/.wifi.MitvWifiActivity"
+    }
+  },
+  "inputs": [
+    {
+      "id": "hdmi1",
+      "label": "HDMI 1",
+      "kind": "hdmi",
+      "tv_input_id": "com.mediatek.tvinput/.hdmi.HDMIInputService/HW5",
+      "action": "com.xiaomi.mitv.tvplayer.EXTSRC_PLAY",
+      "component": "com.xiaomi.mitv.tvplayer/.ExternalSourceActivity",
+      "int_extra_key": "input",
+      "int_extra_value": 23
+    },
+    {
+      "id": "hdmi2",
+      "label": "HDMI 2 · eARC",
+      "kind": "hdmi",
+      "tv_input_id": "com.mediatek.tvinput/.hdmi.HDMIInputService/HW6",
+      "action": "com.xiaomi.mitv.tvplayer.EXTSRC_PLAY",
+      "component": "com.xiaomi.mitv.tvplayer/.ExternalSourceActivity",
+      "int_extra_key": "input",
+      "int_extra_value": 24
+    },
+    {
+      "id": "hdmi3",
+      "label": "HDMI 3",
+      "kind": "hdmi",
+      "tv_input_id": "com.mediatek.tvinput/.hdmi.HDMIInputService/HW7",
+      "action": "com.xiaomi.mitv.tvplayer.EXTSRC_PLAY",
+      "component": "com.xiaomi.mitv.tvplayer/.ExternalSourceActivity",
+      "int_extra_key": "input",
+      "int_extra_value": 25
+    },
+    {
+      "id": "av",
+      "label": "AV",
+      "kind": "av",
+      "tv_input_id": "com.mediatek.tvinput/.composite.CompositeInputService/HW2",
+      "action": "com.xiaomi.mitv.tvplayer.EXTSRC_PLAY",
+      "component": "com.xiaomi.mitv.tvplayer/.ExternalSourceActivity",
+      "int_extra_key": "input",
+      "int_extra_value": 2
+    },
+    {
+      "id": "atv",
+      "label": "TV / ATV",
+      "kind": "tuner",
+      "tv_input_id": "com.mediatek.tvinput/.tuner.TunerInputService/HW1",
+      "action": "com.xiaomi.mitv.tvplayer.ATV_PLAY",
+      "component": "com.xiaomi.mitv.tvplayer/.AtvActivity"
+    },
+    {
+      "id": "dtmb",
+      "label": "DTMB",
+      "kind": "tuner",
+      "tv_input_id": "com.mediatek.tvinput/.tuner.TunerInputService/HW0",
+      "action": "com.xiaomi.mitv.tvplayer.DTMB_PLAY",
+      "component": "com.xiaomi.mitv.tvplayer/.dtmb.DTMBActivity"
+    }
+  ],
+  "home_override": {
+    "packages": [
+      "com.mitv.tvhome"
+    ],
+    "components": [
+      "com.xiaomi.mitv.settings/.entry.FallbackHome"
+    ]
+  }
+}

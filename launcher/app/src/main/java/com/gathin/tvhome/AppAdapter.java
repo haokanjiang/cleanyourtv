@@ -178,6 +178,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final boolean animations;
     private final boolean advancedEffects;
     private final boolean showLibrary;
+    /** Device profiles for China-market firmware may expose useful system apps only through CATEGORY_LAUNCHER. */
+    private final boolean includeRegularLauncherApps;
     /** Packages with a leanback entry at the last reload(): their tiles launch with the leanback category. */
     private Set<String> leanbackPackages = new HashSet<>();
     private final boolean showHomeSettings;
@@ -185,17 +187,19 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final boolean reducedMotion;
     private final List<Entry> items = new ArrayList<>();
 
-    AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
+    AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg, DeviceProfile deviceProfile) {
         this.ctx = ctx;
         this.listener = listener;
         this.dockSize = dockSize;
         this.favourites = cfg.dockApps;
         this.fillDock = cfg.fillDock;
         this.hidden = new HashSet<>(cfg.hiddenApps);
+        if (deviceProfile != null) this.hidden.addAll(deviceProfile.hiddenPackages);
         this.animations = cfg.animations;
         this.advancedEffects = cfg.animations && cfg.advancedEffects;
         this.showHomeSettings = cfg.showHomeSettingsShortcut;
         this.showLibrary = cfg.appLibrary;
+        this.includeRegularLauncherApps = deviceProfile != null && deviceProfile.includeRegularLauncherApps;
         this.reducedMotion = cfg.reducedMotion;
         this.rowsBelowDock = cfg.rowsBelowDock;
         this.dockTitle = cfg.dockTitle;
@@ -218,12 +222,18 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         leanbackPackages = tvPackages;
         Set<String> added = LibraryApps.load(ctx);
         Set<String> removed = LibraryApps.loadRemoved(ctx);
-        if (!added.isEmpty()) {
-            Set<String> seen = new HashSet<>(tvPackages);
+        Set<String> regularPackages = new HashSet<>();
+        if (includeRegularLauncherApps || !added.isEmpty()) {
+            // Prefer a TV/leanback entry when a package exposes both categories. China-market Xiaomi
+            // firmware also ships useful system apps (Settings, Gallery, voice settings) with only
+            // CATEGORY_LAUNCHER, so its device profile opts into those automatically.
+            Set<String> seenPackages = new HashSet<>(tvPackages);
             for (ResolveInfo ri : pm.queryIntentActivities(
                     new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)) {
-                if (ri.activityInfo != null && added.contains(ri.activityInfo.packageName)
-                        && seen.add(ri.activityInfo.packageName)) found.add(ri);
+                if (ri.activityInfo == null) continue;
+                String pkg = ri.activityInfo.packageName;
+                regularPackages.add(pkg);
+                if ((includeRegularLauncherApps || added.contains(pkg)) && seenPackages.add(pkg)) found.add(ri);
             }
         }
         Map<String, Cards.Card> cardByPkg = new HashMap<>();
@@ -236,7 +246,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             if (ri.activityInfo == null) continue;
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(ctx.getPackageName()) || !ri.activityInfo.exported
-                    || !LibraryApps.visible(tvPackages.contains(pkg), hidden.contains(pkg), added.contains(pkg), removed.contains(pkg))) continue;
+                    || !LibraryApps.visible(tvPackages.contains(pkg) || (includeRegularLauncherApps && regularPackages.contains(pkg)),
+                            hidden.contains(pkg), added.contains(pkg), removed.contains(pkg))) continue;
             ComponentName component = new ComponentName(pkg, ri.activityInfo.name);
             Cards.Card card = cardByPkg.get(pkg);
             if (card != null && !card.component.equals(component)) continue;   // the card stands in for this tile
