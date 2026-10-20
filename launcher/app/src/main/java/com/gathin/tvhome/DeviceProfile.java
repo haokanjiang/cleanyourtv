@@ -28,22 +28,31 @@ final class DeviceProfile {
     private static final String DIR = "device-profiles";
 
     static final DeviceProfile NONE = new DeviceProfile(
-            "default", "", false, Collections.emptyList(), null, null, Collections.emptyList());
+            "default", "", false, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+            null, null, Collections.emptyList());
 
     final String id;
     final String stockLauncherPackage;
     final boolean includeRegularLauncherApps;
     final List<String> hiddenPackages;
+    /** Packages whose foreground HOME window should redirect back to this launcher through accessibility. */
+    final List<String> homeOverridePackages;
+    /** Exact flattened components that should trigger the same redirect (e.g. a firmware FallbackHome). */
+    final List<String> homeOverrideComponents;
     final Target settings;
     final Target wifiSettings;
     final List<Input> inputs;
 
     private DeviceProfile(String id, String stockLauncherPackage, boolean includeRegularLauncherApps,
-                          List<String> hiddenPackages, Target settings, Target wifiSettings, List<Input> inputs) {
+                          List<String> hiddenPackages, List<String> homeOverridePackages,
+                          List<String> homeOverrideComponents, Target settings, Target wifiSettings,
+                          List<Input> inputs) {
         this.id = id;
         this.stockLauncherPackage = stockLauncherPackage;
         this.includeRegularLauncherApps = includeRegularLauncherApps;
         this.hiddenPackages = Collections.unmodifiableList(hiddenPackages);
+        this.homeOverridePackages = Collections.unmodifiableList(homeOverridePackages);
+        this.homeOverrideComponents = Collections.unmodifiableList(homeOverrideComponents);
         this.settings = settings;
         this.wifiSettings = wifiSettings;
         this.inputs = Collections.unmodifiableList(inputs);
@@ -51,6 +60,22 @@ final class DeviceProfile {
 
     boolean hasInputs() {
         return !inputs.isEmpty();
+    }
+
+    boolean shouldOverrideHome(String packageName, String className) {
+        if (packageName == null || packageName.isEmpty()) return false;
+        for (String pkg : homeOverridePackages) {
+            if (pkg.equals(packageName)) return true;
+        }
+        if (className == null || className.isEmpty()) return false;
+        String fullClass = className.startsWith(".") ? packageName + className : className;
+        String flattened = packageName + "/" + fullClass;
+        String shortFlattened = packageName + "/" + (fullClass.startsWith(packageName + ".")
+                ? "." + fullClass.substring(packageName.length() + 1) : fullClass);
+        for (String component : homeOverrideComponents) {
+            if (component.equals(flattened) || component.equals(shortFlattened)) return true;
+        }
+        return false;
     }
 
     /** Returns the profile's preferred Settings destination, or null when the generic route should be used. */
@@ -125,12 +150,19 @@ final class DeviceProfile {
             }
 
             List<String> hiddenPackages = strings(root.optJSONArray("hidden_packages"));
+            JSONObject homeOverride = root.optJSONObject("home_override");
+            List<String> homeOverridePackages = strings(
+                    homeOverride == null ? null : homeOverride.optJSONArray("packages"));
+            List<String> homeOverrideComponents = strings(
+                    homeOverride == null ? null : homeOverride.optJSONArray("components"));
 
             DeviceProfile profile = new DeviceProfile(
                     string(root, "id"),
                     string(root, "stock_launcher_package"),
                     root.optBoolean("include_regular_launcher_apps", false),
                     hiddenPackages,
+                    homeOverridePackages,
+                    homeOverrideComponents,
                     mainSettings,
                     wifiSettings,
                     inputs);
