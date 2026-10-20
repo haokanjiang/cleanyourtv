@@ -9,6 +9,7 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -154,11 +155,12 @@ final class DeviceProfile {
     }
 
     private static String read(Context ctx, String path) throws Exception {
-        try (InputStream in = ctx.getAssets().open(path)) {
-            byte[] bytes = new byte[in.available()];
-            int offset = 0, n;
-            while (offset < bytes.length && (n = in.read(bytes, offset, bytes.length - offset)) > 0) offset += n;
-            return new String(bytes, 0, offset, StandardCharsets.UTF_8);
+        try (InputStream in = ctx.getAssets().open(path);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int n;
+            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+            return out.toString(StandardCharsets.UTF_8.name());
         }
     }
 
