@@ -37,6 +37,14 @@ tools\venv\Scripts\python.exe -m pip install -r tools\requirements.txt
 powershell -ExecutionPolicy Bypass -File launcher\build-and-test.ps1 -TvHost <TV_IP>
 ```
 
+The `xiaomi-mftr0` GitHub Actions run also uploads `cleanyourtv-release-apk` for 14 days after its
+tests, lint and release build pass. Download and extract that artifact, then pass its APK to the same
+safety script to skip the local Gradle build while retaining the Home check, install and manual launch:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File launcher\build-and-test.ps1 -TvHost <TV_IP> -ApkPath <PATH_TO_DOWNLOADED_APK>
+```
+
 macOS / Linux:
 
 ```bash
