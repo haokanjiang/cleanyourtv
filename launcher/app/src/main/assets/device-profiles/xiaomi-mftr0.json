@@ -7,6 +7,9 @@
   },
   "stock_launcher_package": "com.mitv.tvhome",
   "include_regular_launcher_apps": true,
+  "hidden_packages": [
+    "com.android.tv.settings"
+  ],
   "settings": {
     "main": {
       "action": "com.xiaomi.mitv.settings.SETTINGS",
