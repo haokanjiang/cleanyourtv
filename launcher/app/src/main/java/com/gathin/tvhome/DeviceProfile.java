@@ -28,20 +28,22 @@ final class DeviceProfile {
     private static final String DIR = "device-profiles";
 
     static final DeviceProfile NONE = new DeviceProfile(
-            "default", "", false, null, null, Collections.emptyList());
+            "default", "", false, Collections.emptyList(), null, null, Collections.emptyList());
 
     final String id;
     final String stockLauncherPackage;
     final boolean includeRegularLauncherApps;
+    final List<String> hiddenPackages;
     final Target settings;
     final Target wifiSettings;
     final List<Input> inputs;
 
     private DeviceProfile(String id, String stockLauncherPackage, boolean includeRegularLauncherApps,
-                          Target settings, Target wifiSettings, List<Input> inputs) {
+                          List<String> hiddenPackages, Target settings, Target wifiSettings, List<Input> inputs) {
         this.id = id;
         this.stockLauncherPackage = stockLauncherPackage;
         this.includeRegularLauncherApps = includeRegularLauncherApps;
+        this.hiddenPackages = Collections.unmodifiableList(hiddenPackages);
         this.settings = settings;
         this.wifiSettings = wifiSettings;
         this.inputs = Collections.unmodifiableList(inputs);
@@ -78,7 +80,6 @@ final class DeviceProfile {
     }
 
     boolean matches(String manufacturer, String model, String device) {
-        // The parsed match values are kept in synthetic Targets? No: encode them in the id metadata fields below.
         Match m = match;
         return m == null || (matchesValue(m.manufacturer, manufacturer)
                 && matchesValue(m.model, model) && matchesValue(m.device, device));
@@ -123,10 +124,13 @@ final class DeviceProfile {
                 }
             }
 
+            List<String> hiddenPackages = strings(root.optJSONArray("hidden_packages"));
+
             DeviceProfile profile = new DeviceProfile(
                     string(root, "id"),
                     string(root, "stock_launcher_package"),
                     root.optBoolean("include_regular_launcher_apps", false),
+                    hiddenPackages,
                     mainSettings,
                     wifiSettings,
                     inputs);
@@ -146,6 +150,16 @@ final class DeviceProfile {
         Integer extraValue = json.has("int_extra_value") ? json.optInt("int_extra_value") : null;
         if (action.isEmpty() && component.isEmpty()) return null;
         return new Target(action, component, extraKey, extraValue);
+    }
+
+    private static List<String> strings(JSONArray array) {
+        if (array == null) return new ArrayList<>();
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < array.length(); i++) {
+            String value = array.optString(i, "").trim();
+            if (!value.isEmpty()) out.add(value);
+        }
+        return out;
     }
 
     private static String string(JSONObject json, String key) {
